@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "numtrack"
+version = "0.1.0"
+description = "NumLock-toggled keypad mouse for Linux Wayland desktops"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["evdev>=1.7,<2"]
+
+[project.urls]
+Homepage = "https://github.com/hamb1y/numtrack"
+Issues = "https://github.com/hamb1y/numtrack/issues"
+
+[project.scripts]
+numtrack = "numtrack.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["numtrack*"]
