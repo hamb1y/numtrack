@@ -15,7 +15,7 @@ compositor keybinds, X11 tools, or Wayland extensions required.
 | **7**, **5** | Hold left button while pressed; tap to click |
 | **9** | Right click |
 | **3** | Middle click |
-| **1** | Toggle scroll mode: **8** scrolls up, **2** scrolls down |
+| **1** | Hold for scroll mode: **8** scrolls up, **2** scrolls down |
 | **NumLock** | Toggle mouse mode |
 
 Hold a direction to keep moving. Combine directions for diagonals. Hold **5**
@@ -23,15 +23,16 @@ or **7** and a direction to drag; release to drop. If both are held, the left
 button stays down until both are released. Right and middle clicks fire once
 per press.
 
-Tap **1** to enter scroll mode, then hold **8** or **2** for smooth vertical
-scrolling. Tap **1** again to return to pointer movement. **4** and **6** do
+Hold **1**, then hold **8** or **2** for smooth vertical scrolling. Release
+**1** to return to pointer movement immediately. **4** and **6** do
 nothing in scroll mode. Turning mouse mode off with NumLock resets scroll mode.
 Scroll output uses high-resolution wheel events with legacy wheel compatibility.
 
-Movement starts gently at 100 pointer units/sec and eases up to 850 over about
-4.2 seconds. Straight and diagonal speeds match. Releasing all directions or
-reversing direction resets the ramp for precise adjustments. Scrolling has its
-own slower easing curve and speed settings.
+Movement starts at 220 pointer units/sec and accelerates immediately, easing
+out toward 1000 over about 1.3 seconds. Straight and diagonal speeds match;
+90-degree turns preserve speed. Releasing all directions or reversing direction
+resets the ramp. Scrolling has its own speed settings and reaches its maximum
+in about 1.1 seconds. Releasing a key stops movement or scrolling immediately.
 
 By default, startup follows the physical keyboard's NumLock LED: if NumLock is
 already on, mouse mode starts on. The LED then shows mouse mode. Other keys
@@ -156,12 +157,12 @@ Numtrack after changes.
 ```toml
 enabled = "numlock"
 devices = []
-speed = 100.0
-max_speed = 850.0
-acceleration = 180.0
-scroll_speed = 1.5
-scroll_max_speed = 12.0
-scroll_acceleration = 3.0
+speed = 220.0
+max_speed = 1000.0
+acceleration = 600.0
+scroll_speed = 3.0
+scroll_max_speed = 16.0
+scroll_acceleration = 12.0
 tick_rate = 120
 
 [bindings]
@@ -173,7 +174,7 @@ KEY_KP7 = "left_hold"
 KEY_KP5 = "left_hold"
 KEY_KP9 = "right_click"
 KEY_KP3 = "middle_click"
-KEY_KP1 = "scroll_toggle"
+KEY_KP1 = "scroll_hold"
 ```
 
 | Setting | Meaning |
@@ -207,12 +208,12 @@ KEY_KP0 = "left_hold"
 
 Any Linux `KEY_*` name can be bound except the reserved `KEY_NUMLOCK` toggle.
 Actions are `up`, `down`, `left`, `right`, `left_click`, `right_click`,
-`middle_click`, `left_hold`, `right_hold`, `middle_hold`, `scroll_toggle`, and
-`passthrough`. Hold actions last while their key is pressed. `scroll_toggle`
-switches modes once per press.
+`middle_click`, `left_hold`, `right_hold`, `middle_hold`, `scroll_hold`,
+`scroll_toggle`, and `passthrough`. Hold actions last while their key is pressed.
+The optional `scroll_toggle` action switches modes once per press.
 
 Upgrading from 0.1: existing config files still override the new defaults.
-Update KP5/KP7 to `left_hold` and KP1 to `scroll_toggle`, or remove those
+Update KP5/KP7 to `left_hold` and KP1 to `scroll_hold`, or remove those
 overrides. Remove old speed overrides to use the gentler movement defaults.
 
 ## Troubleshooting

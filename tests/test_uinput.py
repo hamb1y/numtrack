@@ -105,7 +105,6 @@ class KernelTests(unittest.TestCase):
                     self.assertEqual(values(relayed, codes.EV_KEY, codes.KEY_NUMLOCK), [])
                     emit("KEY_KP1", 1)
                     emit("KEY_KP1", 2)
-                    emit("KEY_KP1", 0)
                     for key, sign in [("KEY_KP8", 1), ("KEY_KP2", -1)]:
                         emit(key, 1)
                         events = collect(pointer, 0.8)
@@ -120,7 +119,6 @@ class KernelTests(unittest.TestCase):
                     emit("KEY_KP4", 1)
                     self.assertEqual(collect(pointer), [])
                     emit("KEY_KP4", 0)
-                    emit("KEY_KP1", 1)
                     emit("KEY_KP1", 0)
                     emit("KEY_KP5", 1)
                     self.assertEqual(values(collect(pointer), codes.EV_KEY, codes.BTN_LEFT), [1])

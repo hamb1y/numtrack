@@ -41,7 +41,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(self.config["bindings"], {
             "KEY_KP8": "up", "KEY_KP4": "left", "KEY_KP6": "right", "KEY_KP2": "down",
             "KEY_KP7": "left_hold", "KEY_KP5": "left_hold", "KEY_KP9": "right_click",
-            "KEY_KP3": "middle_click", "KEY_KP1": "scroll_toggle",
+            "KEY_KP3": "middle_click", "KEY_KP1": "scroll_hold",
         })
 
     def test_disabled_until_toggle_and_movement_directions(self):
@@ -49,8 +49,8 @@ class CoreTests(unittest.TestCase):
         self.controller.tick(0.02)
         self.assertEqual(self.pointer.moves, [])
         self.controller.toggle()
-        for key, action, expected in [(8, "up", (0, -2)), (4, "left", (-2, 0)),
-                                      (6, "right", (2, 0)), (2, "down", (0, 2))]:
+        for key, action, expected in [(8, "up", (0, -4)), (4, "left", (-4, 0)),
+                                      (6, "right", (4, 0)), (2, "down", (0, 4))]:
             self.press(key, action)
             self.controller.tick(0.02)
             self.assertEqual(self.pointer.moves[-1], expected)
@@ -145,25 +145,68 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(self.pointer.scrolls)
         self.press(1, "scroll_toggle")
         self.controller.tick(0.02)
-        self.assertEqual(self.pointer.moves[-1], (0, -2))
+        self.assertEqual(self.pointer.moves[-1], (0, -4))
         self.assertEqual(len(self.pointer.moves), 2)
 
-    def test_gentle_ramp_reaches_cap_slowly_and_resets(self):
+    def test_scroll_hold_releases_back_to_pointer_while_direction_held(self):
+        self.controller.toggle()
+        self.press(1, "scroll_hold")
+        self.press(1, "scroll_hold", 2)
+        self.press(8, "up")
+        self.controller.tick(0.02)
+        self.assertTrue(self.controller.scroll_mode)
+        self.assertTrue(self.pointer.scrolls)
+        self.assertEqual(self.pointer.moves, [])
+        self.press(1, "scroll_hold", 0)
+        self.assertFalse(self.controller.scroll_mode)
+        self.controller.tick(0.02)
+        self.assertEqual(self.pointer.moves, [(0, -4)])
+        self.assertEqual(self.pointer.buttons, [])
+
+    def test_scroll_hold_last_release_and_disconnect(self):
+        self.controller.toggle()
+        self.press(1, "scroll_hold", source="first")
+        self.press(1, "scroll_hold", source="second")
+        self.controller.clear("first")
+        self.assertTrue(self.controller.scroll_mode)
+        self.controller.clear("second")
+        self.assertFalse(self.controller.scroll_mode)
+
+    def test_responsive_ramp_reaches_cap_and_resets(self):
+        self.controller.toggle()
+        self.press(6, "right")
+        for step in range(10):
+            self.controller.tick(0.01)
+        first_tenth = sum(horizontal for horizontal, vertical in self.pointer.moves)
+        self.assertTrue(25 <= first_tenth <= 35)
+        for step in range(90):
+            self.controller.tick(0.01)
+        first_second = sum(horizontal for horizontal, vertical in self.pointer.moves)
+        self.assertTrue(600 <= first_second < 720)
+        self.assertTrue(9 <= self.pointer.moves[-1][0] <= 10)
+        for step in range(40):
+            self.controller.tick(0.01)
+        self.assertEqual(self.pointer.moves[-1][0], 10)
+        self.assertLessEqual(max(horizontal for horizontal, vertical in self.pointer.moves), 10)
+        self.press(6, "right", 0)
+        self.press(4, "left")
+        self.controller.tick(0.02)
+        self.assertEqual(self.pointer.moves[-1], (-4, 0))
+
+    def test_perpendicular_turn_keeps_speed_and_release_stops_immediately(self):
         self.controller.toggle()
         self.press(6, "right")
         for step in range(100):
             self.controller.tick(0.01)
-        first_second = sum(horizontal for horizontal, vertical in self.pointer.moves)
-        self.assertTrue(100 <= first_second < 160)
-        self.assertTrue(1 <= self.pointer.moves[-1][0] <= 3)
-        for step in range(400):
-            self.controller.tick(0.01)
-        self.assertAlmostEqual(self.pointer.moves[-1][0], 8.5, delta=0.5)
-        self.assertLessEqual(max(horizontal for horizontal, vertical in self.pointer.moves), 9)
+        self.press(8, "up")
         self.press(6, "right", 0)
-        self.press(4, "left")
         self.controller.tick(0.02)
-        self.assertEqual(self.pointer.moves[-1], (-2, 0))
+        self.assertLess(self.pointer.moves[-1][1], -15)
+        self.assertGreater(self.controller.elapsed, 1)
+        self.press(8, "up", 0)
+        count = len(self.pointer.moves)
+        self.controller.tick(0.02)
+        self.assertEqual(len(self.pointer.moves), count)
 
     def test_constant_speed_and_fractional_steps(self):
         self.config["acceleration"] = 0
@@ -171,7 +214,7 @@ class CoreTests(unittest.TestCase):
         self.press(6, "right")
         for step in range(120):
             self.controller.tick(1 / 120)
-        self.assertAlmostEqual(sum(horizontal for horizontal, vertical in self.pointer.moves), 100, delta=1)
+        self.assertAlmostEqual(sum(horizontal for horizontal, vertical in self.pointer.moves), 220, delta=1)
 
 
 class ConfigTests(unittest.TestCase):
@@ -233,7 +276,7 @@ class RelayTests(unittest.TestCase):
         self.key(self.codes.KEY_KP8, 1)
         self.key(self.codes.KEY_KP8, 2)
         self.controller.tick(0.02)
-        self.assertEqual(self.pointer.moves, [(0, -2)])
+        self.assertEqual(self.pointer.moves, [(0, -4)])
         self.toggle()
         self.key(self.codes.KEY_KP8, 0)
         self.assertEqual(len(self.forwarded), 4)

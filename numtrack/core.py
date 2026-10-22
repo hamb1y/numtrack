@@ -10,8 +10,12 @@ class Controller:
         self.pointer = pointer
         self.enabled = config["enabled"] is True
         self.pressed = {}
-        self.scroll_mode = False
+        self.scroll_toggled = False
         self.reset_motion()
+
+    @property
+    def scroll_mode(self):
+        return self.scroll_toggled or "scroll_hold" in self.pressed.values()
 
     def reset_motion(self):
         self.elapsed = 0.0
@@ -27,15 +31,19 @@ class Controller:
         for token in list(self.pressed):
             if source is None or token[0] == source:
                 self.key(token, self.pressed[token], 0)
-        self.scroll_mode = False
+        self.scroll_toggled = False
         self.reset_motion()
 
     def key(self, token, action, value):
         if value == 2:
             return
         if value == 0:
+            scroll_before = self.scroll_mode
             previous = self.pressed.pop(token, None)
-            if previous and previous.endswith("_hold") and previous not in self.pressed.values():
+            if previous == "scroll_hold":
+                if self.scroll_mode != scroll_before:
+                    self.reset_motion()
+            elif previous and previous.endswith("_hold") and previous not in self.pressed.values():
                 self.pointer.button(previous.removesuffix("_hold"), False)
             if previous in DIRECTIONS and not any(action in DIRECTIONS for action in self.pressed.values()):
                 self.reset_motion()
@@ -43,8 +51,9 @@ class Controller:
         if not self.enabled or token in self.pressed:
             return
         self.pressed[token] = action
-        if action == "scroll_toggle":
-            self.scroll_mode = not self.scroll_mode
+        if action in {"scroll_toggle", "scroll_hold"}:
+            if action == "scroll_toggle":
+                self.scroll_toggled = not self.scroll_toggled
             self.reset_motion()
         elif action.endswith("_click"):
             button = action.removesuffix("_click")
@@ -71,7 +80,7 @@ class Controller:
         direction = (horizontal / length, vertical / length)
         if self.direction is not None:
             alignment = sum(previous * current for previous, current in zip(self.direction, direction))
-            if alignment <= 0:
+            if alignment < 0:
                 self.reset_motion()
         self.direction = direction
         seconds = min(seconds, 0.05)
@@ -81,7 +90,7 @@ class Controller:
         acceleration = self.config[f"{prefix}acceleration"]
         if acceleration and maximum > speed:
             progress = min(1.0, self.elapsed * acceleration / (maximum - speed))
-            speed += (maximum - speed) * progress * progress * (3 - 2 * progress)
+            speed += (maximum - speed) * progress * (2 - progress)
         self.elapsed += seconds
         if self.scroll_mode:
             total = self.scroll_remainder - direction[1] * speed * seconds * 120

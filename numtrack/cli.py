@@ -7,7 +7,7 @@ from .config import DEFAULT_CONFIG, load_config
 
 def main():
     parser = argparse.ArgumentParser(description="NumLock-toggled keypad mouse for Wayland/Linux")
-    parser.add_argument("--version", action="version", version="numtrack 0.2.0")
+    parser.add_argument("--version", action="version", version="numtrack 0.2.1")
     parser.add_argument("--config", metavar="PATH", help="TOML configuration path")
     parser.add_argument("--print-config", action="store_true", help="print defaults and exit")
     parser.add_argument("--check-config", action="store_true", help="validate configuration and exit")

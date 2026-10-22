@@ -9,12 +9,12 @@ DEFAULT_CONFIG = '''# ~/.config/numtrack/config.toml
 enabled = "numlock"
 # Empty list auto-discovers keyboards with a numpad; by-id paths also work.
 devices = []
-speed = 100.0
-max_speed = 850.0
-acceleration = 180.0
-scroll_speed = 1.5
-scroll_max_speed = 12.0
-scroll_acceleration = 3.0
+speed = 220.0
+max_speed = 1000.0
+acceleration = 600.0
+scroll_speed = 3.0
+scroll_max_speed = 16.0
+scroll_acceleration = 12.0
 tick_rate = 120
 
 [bindings]
@@ -26,12 +26,12 @@ KEY_KP7 = "left_hold"
 KEY_KP5 = "left_hold"
 KEY_KP9 = "right_click"
 KEY_KP3 = "middle_click"
-KEY_KP1 = "scroll_toggle"
+KEY_KP1 = "scroll_hold"
 '''
 
 ACTIONS = {
     "up", "left", "right", "down", "left_click", "right_click",
-    "middle_click", "left_hold", "right_hold", "middle_hold", "scroll_toggle", "passthrough",
+    "middle_click", "left_hold", "right_hold", "middle_hold", "scroll_toggle", "scroll_hold", "passthrough",
 }
 
 
