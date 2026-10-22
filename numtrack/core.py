@@ -10,8 +10,14 @@ class Controller:
         self.pointer = pointer
         self.enabled = config["enabled"] is True
         self.pressed = {}
+        self.scroll_mode = False
+        self.reset_motion()
+
+    def reset_motion(self):
         self.elapsed = 0.0
         self.remainder = [0.0, 0.0]
+        self.scroll_remainder = 0.0
+        self.direction = None
 
     def toggle(self):
         self.enabled = not self.enabled
@@ -21,8 +27,8 @@ class Controller:
         for token in list(self.pressed):
             if source is None or token[0] == source:
                 self.key(token, self.pressed[token], 0)
-        self.elapsed = 0.0
-        self.remainder = [0.0, 0.0]
+        self.scroll_mode = False
+        self.reset_motion()
 
     def key(self, token, action, value):
         if value == 2:
@@ -31,11 +37,16 @@ class Controller:
             previous = self.pressed.pop(token, None)
             if previous and previous.endswith("_hold") and previous not in self.pressed.values():
                 self.pointer.button(previous.removesuffix("_hold"), False)
+            if previous in DIRECTIONS and not any(action in DIRECTIONS for action in self.pressed.values()):
+                self.reset_motion()
             return
         if not self.enabled or token in self.pressed:
             return
         self.pressed[token] = action
-        if action.endswith("_click"):
+        if action == "scroll_toggle":
+            self.scroll_mode = not self.scroll_mode
+            self.reset_motion()
+        elif action.endswith("_click"):
             button = action.removesuffix("_click")
             if f"{button}_hold" not in self.pressed.values():
                 self.pointer.button(button, True)
@@ -51,14 +62,34 @@ class Controller:
                 delta_x, delta_y = DIRECTIONS[action]
                 horizontal += delta_x
                 vertical += delta_y
+        if self.scroll_mode:
+            horizontal = 0
         length = math.hypot(horizontal, vertical)
         if not self.enabled or not length:
-            self.elapsed = 0.0
-            self.remainder = [0.0, 0.0]
+            self.reset_motion()
             return
+        direction = (horizontal / length, vertical / length)
+        if self.direction is not None:
+            alignment = sum(previous * current for previous, current in zip(self.direction, direction))
+            if alignment <= 0:
+                self.reset_motion()
+        self.direction = direction
         seconds = min(seconds, 0.05)
-        speed = min(self.config["max_speed"], self.config["speed"] + self.config["acceleration"] * self.elapsed)
+        prefix = "scroll_" if self.scroll_mode else ""
+        speed = self.config[f"{prefix}speed"]
+        maximum = self.config[f"{prefix}max_speed"]
+        acceleration = self.config[f"{prefix}acceleration"]
+        if acceleration and maximum > speed:
+            progress = min(1.0, self.elapsed * acceleration / (maximum - speed))
+            speed += (maximum - speed) * progress * progress * (3 - 2 * progress)
         self.elapsed += seconds
+        if self.scroll_mode:
+            total = self.scroll_remainder - direction[1] * speed * seconds * 120
+            whole = math.trunc(total)
+            self.scroll_remainder = total - whole
+            if whole:
+                self.pointer.scroll(whole)
+            return
         distances = [horizontal / length * speed * seconds, vertical / length * speed * seconds]
         movement = []
         for axis, distance in enumerate(distances):

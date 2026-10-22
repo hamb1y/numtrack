@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from numtrack.config import load_config
 from numtrack.core import Controller
-from numtrack.backend import Keyboard, resolve_bindings
+from numtrack.backend import Keyboard, Pointer, resolve_bindings
 from numtrack.cli import main
 
 
@@ -16,12 +16,16 @@ class FakePointer:
     def __init__(self):
         self.buttons = []
         self.moves = []
+        self.scrolls = []
 
     def button(self, name, pressed):
         self.buttons.append((name, pressed))
 
     def move(self, horizontal, vertical):
         self.moves.append((horizontal, vertical))
+
+    def scroll(self, amount):
+        self.scrolls.append(amount)
 
 
 class CoreTests(unittest.TestCase):
@@ -36,8 +40,8 @@ class CoreTests(unittest.TestCase):
     def test_default_bindings(self):
         self.assertEqual(self.config["bindings"], {
             "KEY_KP8": "up", "KEY_KP4": "left", "KEY_KP6": "right", "KEY_KP2": "down",
-            "KEY_KP7": "left_click", "KEY_KP5": "left_click", "KEY_KP9": "right_click",
-            "KEY_KP3": "middle_click", "KEY_KP1": "left_hold",
+            "KEY_KP7": "left_hold", "KEY_KP5": "left_hold", "KEY_KP9": "right_click",
+            "KEY_KP3": "middle_click", "KEY_KP1": "scroll_toggle",
         })
 
     def test_disabled_until_toggle_and_movement_directions(self):
@@ -45,8 +49,8 @@ class CoreTests(unittest.TestCase):
         self.controller.tick(0.02)
         self.assertEqual(self.pointer.moves, [])
         self.controller.toggle()
-        for key, action, expected in [(8, "up", (0, -7)), (4, "left", (-7, 0)),
-                                      (6, "right", (7, 0)), (2, "down", (0, 7))]:
+        for key, action, expected in [(8, "up", (0, -2)), (4, "left", (-2, 0)),
+                                      (6, "right", (2, 0)), (2, "down", (0, 2))]:
             self.press(key, action)
             self.controller.tick(0.02)
             self.assertEqual(self.pointer.moves[-1], expected)
@@ -101,6 +105,74 @@ class CoreTests(unittest.TestCase):
         self.controller.tick(0.02)
         self.assertEqual(len(self.pointer.moves), count)
 
+    def test_both_left_hold_keys_release_only_after_last_key(self):
+        self.controller.toggle()
+        self.press(5, "left_hold")
+        self.press(7, "left_hold")
+        self.press(5, "left_hold", 0)
+        self.assertEqual(self.pointer.buttons, [("left", True)])
+        self.press(7, "left_hold", 0)
+        self.assertEqual(self.pointer.buttons, [("left", True), ("left", False)])
+
+    def test_scroll_toggle_smooth_directions_and_reset(self):
+        self.controller.toggle()
+        self.press(1, "scroll_toggle")
+        self.press(1, "scroll_toggle", 2)
+        self.press(1, "scroll_toggle", 0)
+        self.assertTrue(self.controller.scroll_mode)
+        for key, action, sign in [(8, "up", 1), (2, "down", -1)]:
+            self.press(key, action)
+            self.controller.tick(0.02)
+            self.assertTrue(0 < sign * self.pointer.scrolls[-1] < 120)
+            self.press(key, action, 0)
+        self.assertEqual(self.pointer.moves, [])
+        count = len(self.pointer.scrolls)
+        self.press(4, "left")
+        self.controller.tick(0.02)
+        self.assertEqual(len(self.pointer.scrolls), count)
+        self.assertEqual(self.pointer.moves, [])
+        self.controller.toggle()
+        self.assertFalse(self.controller.scroll_mode)
+
+    def test_scroll_toggle_back_to_movement_while_direction_held(self):
+        self.controller.toggle()
+        self.press(8, "up")
+        self.controller.tick(0.02)
+        self.press(1, "scroll_toggle")
+        self.press(1, "scroll_toggle", 0)
+        self.controller.tick(0.02)
+        self.assertEqual(len(self.pointer.moves), 1)
+        self.assertTrue(self.pointer.scrolls)
+        self.press(1, "scroll_toggle")
+        self.controller.tick(0.02)
+        self.assertEqual(self.pointer.moves[-1], (0, -2))
+        self.assertEqual(len(self.pointer.moves), 2)
+
+    def test_gentle_ramp_reaches_cap_slowly_and_resets(self):
+        self.controller.toggle()
+        self.press(6, "right")
+        for step in range(100):
+            self.controller.tick(0.01)
+        first_second = sum(horizontal for horizontal, vertical in self.pointer.moves)
+        self.assertTrue(100 <= first_second < 160)
+        self.assertTrue(1 <= self.pointer.moves[-1][0] <= 3)
+        for step in range(400):
+            self.controller.tick(0.01)
+        self.assertAlmostEqual(self.pointer.moves[-1][0], 8.5, delta=0.5)
+        self.assertLessEqual(max(horizontal for horizontal, vertical in self.pointer.moves), 9)
+        self.press(6, "right", 0)
+        self.press(4, "left")
+        self.controller.tick(0.02)
+        self.assertEqual(self.pointer.moves[-1], (-2, 0))
+
+    def test_constant_speed_and_fractional_steps(self):
+        self.config["acceleration"] = 0
+        self.controller.toggle()
+        self.press(6, "right")
+        for step in range(120):
+            self.controller.tick(1 / 120)
+        self.assertAlmostEqual(sum(horizontal for horizontal, vertical in self.pointer.moves), 100, delta=1)
+
 
 class ConfigTests(unittest.TestCase):
     def load(self, contents):
@@ -118,6 +190,8 @@ class ConfigTests(unittest.TestCase):
     def test_reject_invalid_config(self):
         for contents in ['speed = -1', 'speed = nan', 'enabled = 1', 'devices = "bad"',
                          'tick_rate = 0', 'tick_rate = 2000', 'max_speed = 1', 'unknown = true',
+                         'scroll_speed = 0', 'scroll_max_speed = 1', 'scroll_acceleration = -1',
+                         'scroll_speed = inf',
                          '[bindings]\nKEY_KP5 = "bad"', '[bindings]\nKEY_NUMLOCK = "up"']:
             with self.subTest(contents=contents), self.assertRaises(ValueError):
                 self.load(contents)
@@ -159,7 +233,7 @@ class RelayTests(unittest.TestCase):
         self.key(self.codes.KEY_KP8, 1)
         self.key(self.codes.KEY_KP8, 2)
         self.controller.tick(0.02)
-        self.assertEqual(self.pointer.moves, [(0, -7)])
+        self.assertEqual(self.pointer.moves, [(0, -2)])
         self.toggle()
         self.key(self.codes.KEY_KP8, 0)
         self.assertEqual(len(self.forwarded), 4)
@@ -198,6 +272,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(main(), 0)
         self.assertEqual(output.getvalue(), "/dev/input/event99\tTest keypad\n")
         self.assertEqual(closed, [True])
+
+
+class PointerTests(unittest.TestCase):
+    def test_high_resolution_scroll_includes_legacy_detents(self):
+        import evdev
+        events = []
+        pointer = Pointer.__new__(Pointer)
+        pointer.codes = evdev.ecodes
+        pointer.wheel_remainder = 0
+        pointer.device = SimpleNamespace(write=lambda *event: events.append(event), syn=lambda: None)
+        for amount in (60, 60, -60, -60, -120):
+            pointer.scroll(amount)
+        self.assertEqual([value for event_type, code, value in events if code == evdev.ecodes.REL_WHEEL_HI_RES],
+                         [60, 60, -60, -60, -120])
+        self.assertEqual([value for event_type, code, value in events if code == evdev.ecodes.REL_WHEEL], [1, -1, -1])
+        self.assertEqual(pointer.wheel_remainder, 0)
 
 
 if __name__ == "__main__":

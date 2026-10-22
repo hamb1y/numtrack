@@ -12,15 +12,26 @@ compositor keybinds, X11 tools, or Wayland extensions required.
 | **4** | Move left |
 | **6** | Move right |
 | **2** | Move down |
-| **7**, **5** | Left click |
+| **7**, **5** | Hold left button while pressed; tap to click |
 | **9** | Right click |
 | **3** | Middle click |
-| **1** | Hold left button while pressed |
+| **1** | Toggle scroll mode: **8** scrolls up, **2** scrolls down |
 | **NumLock** | Toggle mouse mode |
 
-Hold a direction to keep moving. Combine directions for diagonals. Hold **1**
-and a direction to drag; release **1** to drop. Clicks fire once per press.
-Movement accelerates while held, with equal straight and diagonal speeds.
+Hold a direction to keep moving. Combine directions for diagonals. Hold **5**
+or **7** and a direction to drag; release to drop. If both are held, the left
+button stays down until both are released. Right and middle clicks fire once
+per press.
+
+Tap **1** to enter scroll mode, then hold **8** or **2** for smooth vertical
+scrolling. Tap **1** again to return to pointer movement. **4** and **6** do
+nothing in scroll mode. Turning mouse mode off with NumLock resets scroll mode.
+Scroll output uses high-resolution wheel events with legacy wheel compatibility.
+
+Movement starts gently at 100 pointer units/sec and eases up to 850 over about
+4.2 seconds. Straight and diagonal speeds match. Releasing all directions or
+reversing direction resets the ramp for precise adjustments. Scrolling has its
+own slower easing curve and speed settings.
 
 By default, startup follows the physical keyboard's NumLock LED: if NumLock is
 already on, mouse mode starts on. The LED then shows mouse mode. Other keys
@@ -145,9 +156,12 @@ Numtrack after changes.
 ```toml
 enabled = "numlock"
 devices = []
-speed = 350.0
-max_speed = 1400.0
-acceleration = 1000.0
+speed = 100.0
+max_speed = 850.0
+acceleration = 180.0
+scroll_speed = 1.5
+scroll_max_speed = 12.0
+scroll_acceleration = 3.0
 tick_rate = 120
 
 [bindings]
@@ -155,11 +169,11 @@ KEY_KP8 = "up"
 KEY_KP4 = "left"
 KEY_KP6 = "right"
 KEY_KP2 = "down"
-KEY_KP7 = "left_click"
-KEY_KP5 = "left_click"
+KEY_KP7 = "left_hold"
+KEY_KP5 = "left_hold"
 KEY_KP9 = "right_click"
 KEY_KP3 = "middle_click"
-KEY_KP1 = "left_hold"
+KEY_KP1 = "scroll_toggle"
 ```
 
 | Setting | Meaning |
@@ -168,7 +182,10 @@ KEY_KP1 = "left_hold"
 | `devices` | Empty means discover physical keyboards with NumLock, KP8, and KP2. Set explicit paths to limit capture. |
 | `speed` | Starting pointer units per second. |
 | `max_speed` | Maximum pointer units per second; at least `speed`. |
-| `acceleration` | Pointer units per second squared; `0` gives constant speed. |
+| `acceleration` | Ramp rate: time to maximum is `(max_speed - speed) / acceleration`, with smooth easing; `0` gives constant starting speed. |
+| `scroll_speed` | Starting scroll speed in wheel detents per second. |
+| `scroll_max_speed` | Maximum scroll speed in detents per second. |
+| `scroll_acceleration` | Scroll ramp rate, using the same easing formula; `0` gives constant starting speed. |
 | `tick_rate` | Update frequency, from 10 to 1000 Hz. |
 
 Compositor pointer acceleration and sensitivity still apply. Discovery checks
@@ -190,8 +207,13 @@ KEY_KP0 = "left_hold"
 
 Any Linux `KEY_*` name can be bound except the reserved `KEY_NUMLOCK` toggle.
 Actions are `up`, `down`, `left`, `right`, `left_click`, `right_click`,
-`middle_click`, `left_hold`, `right_hold`, `middle_hold`, and `passthrough`.
-Hold actions last while their key is pressed.
+`middle_click`, `left_hold`, `right_hold`, `middle_hold`, `scroll_toggle`, and
+`passthrough`. Hold actions last while their key is pressed. `scroll_toggle`
+switches modes once per press.
+
+Upgrading from 0.1: existing config files still override the new defaults.
+Update KP5/KP7 to `left_hold` and KP1 to `scroll_toggle`, or remove those
+overrides. Remove old speed overrides to use the gentler movement defaults.
 
 ## Troubleshooting
 

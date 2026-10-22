@@ -13,9 +13,11 @@ LOG = logging.getLogger("numtrack")
 class Pointer:
     def __init__(self, evdev):
         self.codes = evdev.ecodes
+        self.wheel_remainder = 0
         self.device = evdev.UInput({
             self.codes.EV_KEY: [self.codes.BTN_LEFT, self.codes.BTN_RIGHT, self.codes.BTN_MIDDLE],
-            self.codes.EV_REL: [self.codes.REL_X, self.codes.REL_Y],
+            self.codes.EV_REL: [self.codes.REL_X, self.codes.REL_Y,
+                               self.codes.REL_WHEEL, self.codes.REL_WHEEL_HI_RES],
         }, name="numtrack pointer")
 
     def button(self, name, pressed):
@@ -25,6 +27,17 @@ class Pointer:
     def move(self, horizontal, vertical):
         self.device.write(self.codes.EV_REL, self.codes.REL_X, horizontal)
         self.device.write(self.codes.EV_REL, self.codes.REL_Y, vertical)
+        self.device.syn()
+
+    def scroll(self, amount):
+        self.device.write(self.codes.EV_REL, self.codes.REL_WHEEL_HI_RES, amount)
+        self.wheel_remainder += amount
+        detents = abs(self.wheel_remainder) // 120
+        if self.wheel_remainder < 0:
+            detents = -detents
+        if detents:
+            self.device.write(self.codes.EV_REL, self.codes.REL_WHEEL, detents)
+            self.wheel_remainder -= detents * 120
         self.device.syn()
 
 
@@ -84,7 +97,10 @@ class Keyboard:
             if event.code in self.consumed or (
                 action and self.controller.enabled and event.value == 1 and event.code not in self.forwarded
             ):
+                scroll_before = self.controller.scroll_mode
                 self.controller.key(token, action, event.value)
+                if self.controller.scroll_mode != scroll_before:
+                    LOG.info("Scroll mode %s", "enabled" if self.controller.scroll_mode else "disabled")
                 if event.value == 0:
                     self.consumed.discard(event.code)
                 else:

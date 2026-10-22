@@ -9,9 +9,12 @@ DEFAULT_CONFIG = '''# ~/.config/numtrack/config.toml
 enabled = "numlock"
 # Empty list auto-discovers keyboards with a numpad; by-id paths also work.
 devices = []
-speed = 350.0
-max_speed = 1400.0
-acceleration = 1000.0
+speed = 100.0
+max_speed = 850.0
+acceleration = 180.0
+scroll_speed = 1.5
+scroll_max_speed = 12.0
+scroll_acceleration = 3.0
 tick_rate = 120
 
 [bindings]
@@ -19,16 +22,16 @@ KEY_KP8 = "up"
 KEY_KP4 = "left"
 KEY_KP6 = "right"
 KEY_KP2 = "down"
-KEY_KP7 = "left_click"
-KEY_KP5 = "left_click"
+KEY_KP7 = "left_hold"
+KEY_KP5 = "left_hold"
 KEY_KP9 = "right_click"
 KEY_KP3 = "middle_click"
-KEY_KP1 = "left_hold"
+KEY_KP1 = "scroll_toggle"
 '''
 
 ACTIONS = {
     "up", "left", "right", "down", "left_click", "right_click",
-    "middle_click", "left_hold", "right_hold", "middle_hold", "passthrough",
+    "middle_click", "left_hold", "right_hold", "middle_hold", "scroll_toggle", "passthrough",
 }
 
 
@@ -56,16 +59,19 @@ def load_config(path=None):
         not isinstance(device, str) or not device for device in config["devices"]
     ):
         raise ValueError("devices must be an array of nonempty paths")
-    for option in ("speed", "max_speed", "acceleration", "tick_rate"):
+    for option in ("speed", "max_speed", "acceleration", "scroll_speed", "scroll_max_speed",
+                   "scroll_acceleration", "tick_rate"):
         value = config[option]
         if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value):
             raise ValueError(f"{option} must be a finite number")
-        if value < 0 or (option != "acceleration" and value == 0):
+        if value < 0 or (not option.endswith("acceleration") and value == 0):
             raise ValueError(f"Invalid {option}: {value}")
     if not 10 <= config["tick_rate"] <= 1000:
         raise ValueError("tick_rate must be between 10 and 1000")
     if config["max_speed"] < config["speed"]:
         raise ValueError("max_speed must be at least speed")
+    if config["scroll_max_speed"] < config["scroll_speed"]:
+        raise ValueError("scroll_max_speed must be at least scroll_speed")
     for key, action in config["bindings"].items():
         if not key.startswith("KEY_") or not isinstance(action, str) or action not in ACTIONS:
             raise ValueError(f"Invalid binding: {key} = {action!r}")
